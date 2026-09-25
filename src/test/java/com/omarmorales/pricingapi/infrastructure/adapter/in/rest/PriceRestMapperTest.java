@@ -1,4 +1,4 @@
-package com.omarmorales.pricingapi.infraestructure.adapter.in.rest;
+package com.omarmorales.pricingapi.infrastructure.adapter.in.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import com.omarmorales.pricingapi.domain.model.DateRange;
 import com.omarmorales.pricingapi.domain.model.Money;
 import com.omarmorales.pricingapi.domain.model.Price;
-import com.omarmorales.pricingapi.infraestructure.adapter.in.rest.dto.PriceResponse;
+import com.omarmorales.pricingapi.infrastructure.adapter.in.rest.dto.PriceResponse;
 
 /**
  * Unit tests for {@link PriceRestMapper}.

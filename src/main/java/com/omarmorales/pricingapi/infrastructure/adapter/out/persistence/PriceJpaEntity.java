@@ -1,4 +1,4 @@
-package com.omarmorales.pricingapi.infraestructure.adapter.out.persistence;
+package com.omarmorales.pricingapi.infrastructure.adapter.out.persistence;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,6 +12,13 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * JPA entity mapped to the {@code prices} table.
+ *
+ * <p>Each row is the price of a product of a brand under a price list during a date range.
+ * When ranges overlap, the row with the highest {@code priority} applies. The
+ * {@code idx_prices_lookup} index supports the applicable-price query.
+ */
 @Entity
 @Table(
         name = "prices",

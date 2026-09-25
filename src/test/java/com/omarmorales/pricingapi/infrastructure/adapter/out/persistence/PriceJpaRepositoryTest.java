@@ -1,4 +1,4 @@
-package com.omarmorales.pricingapi.infraestructure.adapter.out.persistence;
+package com.omarmorales.pricingapi.infrastructure.adapter.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

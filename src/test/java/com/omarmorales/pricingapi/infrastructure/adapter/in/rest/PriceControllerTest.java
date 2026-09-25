@@ -1,4 +1,4 @@
-package com.omarmorales.pricingapi.infraestructure.adapter.in.rest;
+package com.omarmorales.pricingapi.infrastructure.adapter.in.rest;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;

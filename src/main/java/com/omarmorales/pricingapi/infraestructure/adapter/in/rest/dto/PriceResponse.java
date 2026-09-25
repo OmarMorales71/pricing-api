@@ -10,5 +10,4 @@ public record PriceResponse(
         LocalDateTime startDate,
         LocalDateTime endDate,
         BigDecimal price,
-        String currency) {
-}
+        String currency) {}

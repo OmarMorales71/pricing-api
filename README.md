@@ -1,1 +1,191 @@
-# pricing-api
+# Pricing API
+
+## Overview
+
+A Spring Boot REST service that returns the price that applies to a product of a brand at a given date and time.
+
+- **Problem:** a product can have several prices whose validity periods overlap. The caller needs the single price that is in effect at a given moment.
+- **Main use case:** query by `brandId`, `productId` and `applicationDate`. The response contains the applicable price list, its validity period, the final price and the currency.
+- **Key business rule:** of all prices whose `[startDate, endDate]` range contains the application date, the one with the **highest `priority`** applies.
+
+## Tech Stack
+
+- Java 21
+- Spring Boot 4.1.1
+- H2 in-memory database
+- Lombok
+- Maven 3.9.16
+- JUnit 5, Mockito, AssertJ, MockMvc (through the Spring Boot test starters)
+
+## Architecture
+
+The service uses Hexagonal Architecture (Ports and Adapters):
+
+```
+com.omarmorales.pricingapi
+├── domain
+│   ├── model          Price, DateRange, Money (records with invariant checks)
+│   └── exception      ApplicablePriceNotFoundException
+├── application
+│   ├── port/in        FindApplicablePriceUseCase, PriceQuery
+│   ├── port/out       PriceRepositoryPort
+│   └── service        FindApplicablePriceService
+└── infrastructure/adapter
+    ├── in/rest        PriceController, PriceRestMapper, ApiExceptionHandler, dto/PriceResponse
+    └── out/persistence PriceRepositoryAdapter, PriceJpaRepository, PriceJpaEntity, PriceEntityMapper
+```
+
+- **Domain:** immutable records that enforce their own rules. `Price` requires positive IDs, a non-negative priority, a period and an amount. `DateRange` is a closed interval, so `end >= start`. `Money` holds a non-negative amount and a `java.util.Currency`.
+- **Application:** `FindApplicablePriceUseCase` is the inbound port. It takes a validated `PriceQuery`. `FindApplicablePriceService` calls the outbound port `PriceRepositoryPort` and throws `ApplicablePriceNotFoundException` when it finds no price.
+- **Inbound adapter:** `PriceController` binds the request parameters to a `PriceQuery`, calls the use case and maps the domain `Price` to a `PriceResponse` DTO. `ApiExceptionHandler` turns errors into RFC 9457 `ProblemDetail` responses.
+- **Outbound adapter:** `PriceRepositoryAdapter` implements `PriceRepositoryPort` with a Spring Data JPA query and maps `PriceJpaEntity` to the domain model.
+- **Dependency flow:** `infrastructure → application → domain`. Adapters depend on the ports, and the domain depends on nothing else in the project. The JPA entity and the REST DTO never leave their adapter packages.
+
+## Running the Application
+
+**Requirements:** JDK 21. You don't need a local Maven installation because the wrapper (`./mvnw`, `mvnw.cmd` on Windows) downloads it.
+
+```bash
+./mvnw spring-boot:run
+```
+
+Or build and run the jar:
+
+```bash
+./mvnw clean package
+java -jar target/pricing-api-0.0.1-SNAPSHOT.jar
+```
+
+The application starts on port `8080` and needs no external configuration.
+
+**Database:** on every startup, an in-memory H2 database (`jdbc:h2:mem:pricingdb`) is created from `schema.sql` and loaded with the four sample prices in `data.sql` (brand `1`, product `35455`). Hibernate runs with `ddl-auto: validate`, so the SQL scripts own the schema. You can inspect the data in the H2 console at `http://localhost:8080/h2-console`. Use JDBC URL `jdbc:h2:mem:pricingdb`, user `sa` and an empty password.
+
+## Testing
+Unit and integration tests:
+```bash
+./mvnw test
+```
+
+Integration tests:
+```bash
+./mvnw test -Dtest=FindApplicablePriceIntegrationTest
+```
+
+| Type | Classes | What they cover                                                                                                                                      |
+|---|---|------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Domain unit tests | `PriceTest`, `DateRangeTest`, `MoneyTest`, `ApplicablePriceNotFoundExceptionTest` | Invariants (positive IDs, non-negative priority and amount, ISO 4217 currency, `end >= start`) and inclusive boundaries in `contains`/`isApplicable` |
+| Application unit tests | `PriceQueryTest`, `FindApplicablePriceServiceTest` (Mockito) | Query validation, delegation to the port, not-found exception                                                                                        |
+| Web slice | `PriceControllerTest` (`@WebMvcTest`) | 200 response mapping, 404 problem detail, 400 on a missing parameter, a malformed date or a non-numeric ID                                           |
+| Persistence slice | `PriceJpaRepositoryTest` (`@DataJpaTest`) | Inclusive start and end boundaries, brand and product filtering, highest priority wins.                                                              |
+| Mapper / adapter unit tests | `PriceRestMapperTest`, `PriceEntityMapperTest`, `PriceRepositoryAdapterTest` | Entity ↔ domain ↔ DTO mapping, rejection of invalid stored data                                                                                      |
+| Integration | `FindApplicablePriceIntegrationTest` (`@SpringBootTest` + MockMvc) | The five exercise scenarios, run end to end against the seed data                                                                                    |
+| Context | `PricingApiApplicationTests` | The application context loads                                                                                                                        |
+
+Integration and persistence tests run against in-memory H2, so no external database is needed. `FindApplicablePriceIntegrationTest` activates the `test` profile (`application-test.yml`, database `jdbc:h2:mem:pricing-test`). It also prints each request and response to the console. The five scenarios check brand `1` and product `35455`:
+
+| Application date | Expected price list | Expected price |
+|---|---|---|
+| 2020-06-14 10:00 | 1 | 35.50 EUR |
+| 2020-06-14 16:00 | 2 | 25.45 EUR |
+| 2020-06-14 21:00 | 1 | 35.50 EUR |
+| 2020-06-15 10:00 | 3 | 30.50 EUR |
+| 2020-06-16 21:00 | 4 | 38.95 EUR |
+
+## API
+
+### `GET /api/v1/prices`
+
+Returns the price that applies to a product of a brand at a given date and time.
+
+**Query parameters** (all required)
+
+| Name | Type | Notes |
+|---|---|---|
+| `brandId` | long | Brand identifier |
+| `productId` | long | Product identifier |
+| `applicationDate` | ISO-8601 local date-time | For example `2020-06-14T16:00:00`, with no time zone or offset |
+
+**Responses**
+
+| Status | When                                                                              | Body |
+|---|-----------------------------------------------------------------------------------|---|
+| `200 OK` | A price applies                                                                   | `application/json`, see below |
+| `400 Bad Request` | A parameter is missing, not numeric, or `applicationDate` is not an ISO date-time | `application/problem+json` |
+| `404 Not Found` | No price applies for the brand, product and date                                  | `application/problem+json` |
+| `500 Internal Server Error` | An unexpected error occurred                                                      | Default Spring Boot error body |
+
+**Example request**
+
+```bash
+curl "http://localhost:8080/api/v1/prices?brandId=1&productId=35455&applicationDate=2020-06-14T16:00:00"
+```
+
+**Example response: `200 OK`**
+
+```json
+{
+  "productId": 35455,
+  "brandId": 1,
+  "applicableRate": 2,
+  "startDate": "2020-06-14T15:00:00",
+  "endDate": "2020-06-14T18:30:00",
+  "price": 25.45,
+  "currency": "EUR"
+}
+```
+
+`applicableRate` holds the identifier of the price list that applies (`price_list_id`).
+
+**Example response: `404 Not Found`**
+
+```bash
+curl "http://localhost:8080/api/v1/prices?brandId=1&productId=35455&applicationDate=2019-01-01T00:00:00"
+```
+
+```json
+{
+  "detail": "No applicable price found for brand 1 and product 35455 at 2019-01-01T00:00",
+  "instance": "/api/v1/prices",
+  "status": 404,
+  "title": "Price not found"
+}
+```
+
+**Example response: `400 Bad Request`**
+
+```bash
+curl "http://localhost:8080/api/v1/prices?brandId=1&applicationDate=2019-01-01T00:00:00"
+```
+
+```json
+{
+  "detail": "Required parameter 'productId' is not present.",
+  "instance": "/api/v1/prices",
+  "status": 400,
+  "title": "Bad Request"
+}
+```
+
+## Assumptions
+
+- **Interval semantics:** both `startDate` and `endDate` are inclusive, in `DateRange.contains` and in the JPQL `BETWEEN` query.
+- **Time zone:** `applicationDate` and the stored dates are `LocalDateTime` values with no time zone. They are compared as-is.
+- **Priority:** a higher numeric value means higher precedence. The domain rejects negative priorities.
+- **Priority ties:** the repository query orders by `priority DESC, startDate DESC` and returns the first row. When two prices have both the same priority and the same `startDate`, the order is not defined.
+- **Identifiers:** `brandId`, `productId` and `priceListId` must be strictly positive in the domain.
+- **Currency:** each price row stores its own ISO 4217 code, which is validated through `java.util.Currency` when the row is mapped to the domain. The service does no currency conversion. The database stores amounts as `DECIMAL(10,2)` and rejects negative values (`CHECK price >= 0`).
+
+## Open Questions / Clarifications
+
+- If two or more applicable prices have the same priority, which one should win? The implementation picks the latest `startDate`. Is that the intended rule, and what if the start dates are also equal?
+- Should overlapping prices with the same priority be rejected when data is loaded?
+- Should `brandId`, `productId` and `priceListId` be strictly positive? If so, should a non-positive request value return `400 Bad Request`?
+- Can `priority` be negative? The domain rejects negative values, but the `prices` table has no constraint on it.
+
+## Quality / Build
+
+Build, run all tests and package the application:
+
+```bash
+./mvnw clean verify
+```

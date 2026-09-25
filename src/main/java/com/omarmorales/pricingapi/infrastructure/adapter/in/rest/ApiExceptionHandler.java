@@ -29,4 +29,17 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle("Price not found");
         return problem;
     }
+
+    /**
+     * Maps an {@link IllegalArgumentException} to a {@code 400 Bad Request} problem.
+     *
+     * @param exception the exception raised when an argument is invalid
+     * @return the problem detail describing the invalid argument
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    ProblemDetail handleIllegalArgument(IllegalArgumentException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid request");
+        return problem;
+    }
 }

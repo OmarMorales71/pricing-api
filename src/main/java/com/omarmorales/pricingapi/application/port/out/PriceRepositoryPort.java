@@ -10,7 +10,7 @@ import java.util.Optional;
  *
  * <p>Persistence adapters implement this interface; the application layer depends only on it.
  */
-public interface PriceRepositoryPort{
+public interface PriceRepositoryPort {
 
     /**
      * Finds the price that applies to a product of a brand at the given date.

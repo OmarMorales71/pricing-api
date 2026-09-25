@@ -20,7 +20,6 @@ public class FindApplicablePriceService implements FindApplicablePriceUseCase {
 
     private final PriceRepositoryPort priceRepository;
 
-
     /**
      * Creates the service with the repository used to look up prices.
      *

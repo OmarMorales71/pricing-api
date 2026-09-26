@@ -16,4 +16,4 @@ CREATE TABLE prices
     CONSTRAINT chk_prices_amount CHECK (price >= 0)
 );
 
-CREATE INDEX idx_prices_lookup ON prices (brand_id, product_id, start_date, end_date);
+CREATE INDEX idx_prices_lookup ON prices (brand_id, product_id, end_date, start_date);

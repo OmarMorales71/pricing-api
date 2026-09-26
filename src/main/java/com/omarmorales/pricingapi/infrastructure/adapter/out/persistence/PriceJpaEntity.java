@@ -24,7 +24,7 @@ import java.time.LocalDateTime;
         name = "prices",
         indexes = @Index(
                 name = "idx_prices_lookup",
-                columnList = "brand_id, product_id, start_date, end_date"))
+                columnList = "brand_id, product_id, end_date, start_date"))
 @Getter
 @Setter
 @NoArgsConstructor
